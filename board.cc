@@ -162,46 +162,69 @@ void Board::GetPawnMoves2(
           AddPawnMoves2(moves, from, to, piece.GetColor());
         }
       }
-    } else {
+    }
+  }
 
-      // En-passant
-      if (other_piece.GetPieceType() == PAWN
-          && piece.GetTeam() != other_piece.GetTeam()) {
+  // En-passant via capture destination squares
+  BoardLocation ep_destinations[2];
+  if (delta_rows != 0) {
+    ep_destinations[0] = from.Relative(delta_rows, -1);
+    ep_destinations[1] = from.Relative(delta_rows, 1);
+  } else {
+    ep_destinations[0] = from.Relative(-1, delta_cols);
+    ep_destinations[1] = from.Relative(1, delta_cols);
+  }
 
-        int n_turns = (4 + piece.GetColor() - other_piece.GetColor()) % 4;
+  bool ep_capture_on_destination[2] = {false, false};
+  for (int ep_idx = 0; ep_idx < 2; ++ep_idx) {
+    const auto& enpassant_to = ep_destinations[ep_idx];
+    if (IsLegalLocation(enpassant_to)) {
+      for (int i = 1; i < 4; ++i) {
+        PlayerColor other_color = static_cast<PlayerColor>((piece.GetColor() + i) % 4);
+        Team other_team = GetTeam(other_color);
+        if (piece.GetTeam() == other_team) continue;
+
+        int n_turns = (4 + piece.GetColor() - other_color) % 4;
         const Move* other_player_move = nullptr;
         if (n_turns > 0 && n_turns <= (int)moves_.size()) {
           other_player_move = &moves_[moves_.size() - n_turns];
         } else if (n_turns < 4) {
-          const auto& enp_move = enp_.enp_moves[other_piece.GetColor()];
+          const auto& enp_move = enp_.enp_moves[other_color];
           if (enp_move.has_value()) {
             other_player_move = &*enp_move;
           }
         }
 
         if (other_player_move != nullptr
-            && other_player_move->To() == to
-            // TODO: Refactor this with 'enp' locations
             && other_player_move->ManhattanDistance() == 2
             && (other_player_move->From().GetRow() == other_player_move->To().GetRow()
-               || other_player_move->From().GetCol() == other_player_move->To().GetCol())
-            ) {
+               || other_player_move->From().GetCol() == other_player_move->To().GetCol())) {
+          
           const BoardLocation& moved_from = other_player_move->From();
-          int delta_row = to.GetRow() - moved_from.GetRow();
-          int delta_col = to.GetCol() - moved_from.GetCol();
-          BoardLocation enpassant_to = moved_from.Relative(
+          const BoardLocation& ep_to = other_player_move->To();
+          int delta_row = ep_to.GetRow() - moved_from.GetRow();
+          int delta_col = ep_to.GetCol() - moved_from.GetCol();
+          BoardLocation skipped = moved_from.Relative(
               delta_row / 2, delta_col / 2);
-          // there may be both en-passant and piece capture in the same move
-          auto existing = GetPiece(enpassant_to);
-          if (existing.Missing()
-              || existing.GetTeam() != piece.GetTeam()) {
-            AddPawnMoves2(moves, from, enpassant_to, piece.GetColor(),
-                         existing, to, other_piece);
+
+          auto other_piece = GetPiece(ep_to);
+          if (other_piece.Present()
+              && other_piece.GetPieceType() == PAWN
+              && other_piece.GetColor() == other_color) {
+            if (enpassant_to == skipped) {
+              auto existing = GetPiece(enpassant_to);
+              if (existing.Missing()
+                  || existing.GetTeam() != piece.GetTeam()) {
+                AddPawnMoves2(moves, from, enpassant_to, piece.GetColor(),
+                             existing, ep_to, other_piece);
+                if (existing.Present()) {
+                  ep_capture_on_destination[ep_idx] = true;
+                }
+              }
+            }
           }
         }
-
       }
-
     }
   }
 
@@ -217,10 +240,22 @@ void Board::GetPawnMoves2(
       capture_row += incr == 0 ? -1 : 1;
     }
     if (IsLegalLocation(capture_row, capture_col)) {
-      auto other_piece = GetPiece(capture_row, capture_col);
+      BoardLocation capture_location(capture_row, capture_col);
+      bool already_covered = false;
+      for (int ep_idx = 0; ep_idx < 2; ++ep_idx) {
+        if (ep_capture_on_destination[ep_idx]
+            && ep_destinations[ep_idx] == capture_location) {
+          already_covered = true;
+          break;
+        }
+      }
+      if (already_covered) {
+        continue;
+      }
+      auto other_piece = GetPiece(capture_location);
       if (other_piece.Present()
           && other_piece.GetTeam() != team) {
-        AddPawnMoves2(moves, from, BoardLocation(capture_row, capture_col),
+        AddPawnMoves2(moves, from, capture_location,
             piece.GetColor(), other_piece);
       }
     }
@@ -1036,7 +1071,11 @@ void Board::MakeMove(const Move& move) {
   // En-passant
   const auto enpassant_location = move.GetEnpassantLocation();
   if (enpassant_location.Present()) {
-    RemovePiece(enpassant_location);
+    if (enpassant_location != move.To()) {
+      if (GetPiece(enpassant_location).Present()) {
+        RemovePiece(enpassant_location);
+      }
+    }
   } else {
     // Castling
     const auto rook_move = move.GetRookMove();
@@ -1103,8 +1142,12 @@ void Board::UndoMove() {
   // Place back en-passant pawns
   const auto enpassant_location = move.GetEnpassantLocation();
   if (enpassant_location.Present()) {
-    SetPiece(enpassant_location,
-             move.GetEnpassantCapture());
+    if (enpassant_location != to) {
+      if (GetPiece(enpassant_location).Missing()) {
+        SetPiece(enpassant_location,
+                 move.GetEnpassantCapture());
+      }
+    }
   } else {
     // Castling: rook move
     const auto rook_move = move.GetRookMove();

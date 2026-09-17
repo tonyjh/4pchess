@@ -72,11 +72,16 @@ std::optional<std::vector<bool>> ParseCastlingAvailability(
 }
 
 std::optional<BoardLocation> ParseEnpLocation(const std::string& enp) {
-  size_t pos = enp.find(':');
-  if (pos == std::string::npos) {
-    return std::nullopt;
+  // Accept both "'j3'" / "j3" (positional, the skipped square) and
+  // "'j3:j4'" / "j3:j4" (skipped square : landing square) entries.
+  std::string to = enp;
+  size_t colon = to.find(':');
+  if (colon != std::string::npos) {
+    to = to.substr(0, colon);
   }
-  std::string to = enp.substr(pos + 1);
+  if (!to.empty() && to.front() == '\'') {
+    to = to.substr(1);
+  }
   if (!to.empty() && to[to.size() - 1] == '\'') {
     to = to.substr(0, to.size() - 1);
   }
@@ -189,26 +194,30 @@ std::shared_ptr<Board> ParseBoardFromFEN(const std::string& fen) {
     for (int i = 0; i < 4; i++) {
       auto enp_location = ParseEnpLocation(parts[i]);
       if (enp_location.has_value()) {
-        BoardLocation& to = *enp_location;
-        int from_row = to.GetRow();
-        int from_col = to.GetCol();
+        BoardLocation skipped = *enp_location;
+        BoardLocation from = skipped;
+        BoardLocation to = skipped;
         switch (static_cast<PlayerColor>(i)) {
         case RED:
-          from_row += 2;
+          from = skipped.Relative(1, 0);
+          to = skipped.Relative(-1, 0);
           break;
         case BLUE:
-          from_col -= 2;
+          from = skipped.Relative(0, -1);
+          to = skipped.Relative(0, 1);
           break;
         case YELLOW:
-          from_row -= 2;
+          from = skipped.Relative(-1, 0);
+          to = skipped.Relative(1, 0);
           break;
         case GREEN:
-          from_col += 2;
+          from = skipped.Relative(0, 1);
+          to = skipped.Relative(0, -1);
           break;
         default:
           break;
         }
-        enp.enp_moves[i] = Move(BoardLocation(from_row, from_col), to);
+        enp.enp_moves[i] = Move(from, to);
       }
     }
   }
