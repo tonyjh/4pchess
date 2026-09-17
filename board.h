@@ -573,6 +573,7 @@ class Board {
   void SetPlayer(const Player& player) { turn_ = player; }
   void MakeNullMove();
   void UndoNullMove();
+  void Print();
 
   bool IsLegalLocation(int row, int col) const {
     if (row < 0

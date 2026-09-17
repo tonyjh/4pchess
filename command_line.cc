@@ -54,6 +54,54 @@ std::string GetPVStr(const AlphaBetaPlayer& player) {
   return pv;
 }
 
+int64_t RunPerftRecursive(Board& board, int depth) {
+  if (depth == 0) {
+    return 1;
+  }
+  constexpr int kLimit = 300;
+  Move moves[kLimit];
+  Player player = board.GetTurn();
+  size_t num_moves = board.GetPseudoLegalMoves2(moves, kLimit);
+  int64_t nodes = 0;
+  for (size_t i = 0; i < num_moves; i++) {
+    const auto& move = moves[i];
+    board.MakeMove(move);
+    if (!board.IsKingInCheck(player)) {
+      if (depth == 1) {
+        nodes++;
+      } else {
+        nodes += RunPerftRecursive(board, depth - 1);
+      }
+    }
+    board.UndoMove();
+  }
+  return nodes;
+}
+
+int64_t RunPerft(Board& board, int depth) {
+  if (depth == 0) {
+    SendInfoMessage("1");
+    return 1;
+  }
+  constexpr int kLimit = 300;
+  Move moves[kLimit];
+  Player player = board.GetTurn();
+  size_t num_moves = board.GetPseudoLegalMoves2(moves, kLimit);
+  int64_t total_nodes = 0;
+  for (size_t i = 0; i < num_moves; i++) {
+    const auto& move = moves[i];
+    board.MakeMove(move);
+    if (!board.IsKingInCheck(player)) {
+      int64_t sub_nodes = (depth == 1) ? 1 : RunPerftRecursive(board, depth - 1);
+      total_nodes += sub_nodes;
+      SendInfoMessage(move.PrettyStr() + ": " + std::to_string(sub_nodes));
+    }
+    board.UndoMove();
+  }
+  SendInfoMessage("Total nodes: " + std::to_string(total_nodes));
+  return total_nodes;
+}
+
 }  // namespace
 
 CommandLine::CommandLine() {
@@ -332,6 +380,27 @@ void CommandLine::HandleCommand(
     int n_legal = player_->GetNumLegalMoves(*board_);
     SendInfoMessage("n_legal " + std::to_string(n_legal));
 
+  } else if (command == "perft") {
+    if (parts.size() < 2) {
+      SendInvalidCommandMessage(line);
+      return;
+    }
+    auto depth_opt = ParseInt(parts[1]);
+    if (!depth_opt.has_value() || *depth_opt < 0) {
+      SendInvalidCommandMessage("Invalid depth for perft: " + parts[1]);
+      return;
+    }
+    auto start = std::chrono::high_resolution_clock::now();
+    int64_t total_nodes = RunPerft(*board_, *depth_opt);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration_ms = duration_cast<milliseconds>(end - start);
+    if (duration_ms.count() > 0) {
+      int64_t nps = (int64_t) (((double)total_nodes) / (duration_ms.count() / 1000.0));
+      SendInfoMessage("Time: " + std::to_string(duration_ms.count()) + " ms, nps: " + std::to_string(nps));
+    } else {
+      SendInfoMessage("Time: 0 ms, nps: " + std::to_string(total_nodes));
+    }
+
   } else if (command == "register") {
     // ignore
   } else if (command == "ucinewgame") {
@@ -471,6 +540,12 @@ void CommandLine::HandleCommand(
     // exit the program
     StopEvaluation();
     running_ = false;
+  } else if (command == "d") {
+    if (board_ == nullptr) {
+      SendInfoMessage("Need to set up board first");
+      return;
+    }
+    board_->Print();
   } else {
     SendInvalidCommandMessage(line);
   }

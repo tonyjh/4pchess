@@ -1607,6 +1607,40 @@ void Board::UndoNullMove() {
   UpdateTurnHash((t+1)%4);
 }
 
+void Board::Print() {
+  Piece p;
+  PieceType t;
+  PlayerColor color;
+  for (int r = 0; r < 14; r++)
+  {
+     for (int c = 0; c < 14; c++)
+     {
+        p = GetPiece(r, c);
+        t = p.GetPieceType();
+        color = p.GetColor();
+        if (t == PAWN)
+           std::cout << "P";
+        else if (t == KNIGHT)
+           std::cout << "N";
+        else if (t == BISHOP)
+           std::cout << "B";
+        else if (t == ROOK)
+           std::cout << "R";
+        else if (t == QUEEN)
+           std::cout << "Q";
+        else if (t == KING)
+           std::cout << "K";
+        else
+           std::cout << ".";
+     }
+     std::cout << "\n";
+  }
+  std::cout << "Castling rights: " << GetCastlingRights(Player(RED)).Kingside() << GetCastlingRights(Player(RED)).Queenside() << " "
+            << GetCastlingRights(Player(BLUE)).Kingside() << GetCastlingRights(Player(BLUE)).Queenside() << " "
+            << GetCastlingRights(Player(YELLOW)).Kingside() << GetCastlingRights(Player(YELLOW)).Queenside() << " "
+            << GetCastlingRights(Player(GREEN)).Kingside() << GetCastlingRights(Player(GREEN)).Queenside() << "\n";
+}
+
 bool Move::DeliversCheck(Board& board) {
   if (delivers_check_ < 0) {
     delivers_check_ = board.DeliversCheck(*this);
