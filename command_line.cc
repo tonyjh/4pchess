@@ -231,13 +231,29 @@ void CommandLine::StartEvaluation() {
         }
         std::string pv = GetPVStr(*player);
 
+        std::string score;
+        if (std::abs(score_centipawn) == kMateValue) {
+          // estimate the number of plies to mate by counting moves in the PV
+          std::istringstream iss(pv);
+          std::string move;
+          int count = 0;
+          while (iss >> move) count++;
+          if (score_centipawn < 0)
+            count = 0 - count;
+          else
+            count = count + 1;
+          score = " score mate " + std::to_string(count / 2);
+        } else {
+          score = " score cp " + std::to_string(score_centipawn);
+        }
+
         std::cout
           << "info"
           << " depth " << depth
           << " time " << duration_ms.count()
           << " nodes " << num_evals
           << " pv " << pv
-          << " score " << score_centipawn;
+          << score;
         if (nps.has_value()) {
           std::cout << " nps " << *nps;
         }
