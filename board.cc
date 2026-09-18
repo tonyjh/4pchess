@@ -1473,6 +1473,25 @@ std::string ToStr(PieceType piece_type) {
   }
 }
 
+std::string ToStrLower(PieceType piece_type) {
+  switch (piece_type) {
+  case PAWN:
+    return "p";
+  case ROOK:
+    return "r";
+  case KNIGHT:
+    return "n";
+  case BISHOP:
+    return "b";
+  case KING:
+    return "k";
+  case QUEEN:
+    return "q";
+  default:
+    return "u";
+  }
+}
+
 }  // namespace
 
 std::ostream& operator<<(
@@ -1585,9 +1604,9 @@ std::string BoardLocation::PrettyStr() const {
 }
 
 std::string Move::PrettyStr() const {
-  std::string s = from_.PrettyStr() + "-" + to_.PrettyStr();
+  std::string s = from_.PrettyStr() + to_.PrettyStr();
   if (promotion_piece_type_ != NO_PIECE) {
-    s += "=" + ToStr(promotion_piece_type_);
+    s += ToStrLower(promotion_piece_type_);
   }
   return s;
 }
