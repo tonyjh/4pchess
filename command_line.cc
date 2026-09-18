@@ -150,16 +150,21 @@ void CommandLine::SetBoard(std::shared_ptr<Board> board) {
 }
 
 void CommandLine::StopEvaluation() {
-  std::lock_guard lock(mutex_);
-  if (thread_ != nullptr) {
+  std::unique_ptr<std::thread> thread;
+  {
+    std::lock_guard lock(mutex_);
+    if (thread_ == nullptr) {
+      return;
+    }
     if (player_ != nullptr) {
       player_->SetCanceled(true);
     }
-    thread_->join();
-    thread_.reset();
-    if (player_ != nullptr) {
-      player_->SetCanceled(false);
-    }
+    thread = std::move(thread_);
+  }
+  thread->join();
+  std::lock_guard lock(mutex_);
+  if (player_ != nullptr) {
+    player_->SetCanceled(false);
   }
 }
 
@@ -175,22 +180,16 @@ void CommandLine::SetEvaluationOptions(const EvaluationOptions& options) {
 
 void CommandLine::StartEvaluation() {
   std::lock_guard lock(mutex_);
-  thread_ = std::make_unique<std::thread>([this]() {
+  if (board_ == nullptr || player_ == nullptr) {
+    // Should never happen.
+    SendInfoMessage("Haven't set up board -- can't evaluate.");
+    return;
+  }
+  std::shared_ptr<Board> board = board_;
+  std::shared_ptr<AlphaBetaPlayer> player = player_;
+  EvaluationOptions options = options_;
+  thread_ = std::make_unique<std::thread>([this, board, player, options]() {
     int depth = 1;
-    std::shared_ptr<Board> board;
-    std::shared_ptr<AlphaBetaPlayer> player;
-    EvaluationOptions options;
-    {
-      std::lock_guard lock(mutex_);
-      if (board_ == nullptr || player_ == nullptr) {
-        // Should never happen.
-        SendInfoMessage("Haven't set up board -- can't evaluate.");
-        return;
-      }
-      board = board_;
-      player = player_;
-      options = options_;
-    }
 
     // if the game is over, print a string showing that
     auto game_result = board->GetGameResult();
