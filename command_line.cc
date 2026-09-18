@@ -102,6 +102,22 @@ int64_t RunPerft(Board& board, int depth) {
   return total_nodes;
 }
 
+std::optional<Move> GetFirstLegalMove(Board& board) {
+  constexpr int kLimit = 300;
+  Move moves[kLimit];
+  Player player = board.GetTurn();
+  size_t num_moves = board.GetPseudoLegalMoves2(moves, kLimit);
+  for (size_t i = 0; i < num_moves; i++) {
+    board.MakeMove(moves[i]);
+    bool legal = !board.IsKingInCheck(player);
+    board.UndoMove();
+    if (legal) {
+      return moves[i];
+    }
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 CommandLine::CommandLine() {
@@ -192,6 +208,7 @@ void CommandLine::StartEvaluation() {
       default:
         break;
       }
+      std::cout << "bestmove 0000" << std::endl;
       return;
     }
 
@@ -271,10 +288,16 @@ void CommandLine::StartEvaluation() {
       depth++;
     }
 
-    if (best_move.has_value()) {
-      std::cout << "bestmove " << best_move->PrettyStr() << std::endl;
-      best_move = std::nullopt;
+    std::optional<Move> move = best_move;
+    if (!move.has_value()) {
+      move = GetFirstLegalMove(*board);
     }
+    if (move.has_value()) {
+      std::cout << "bestmove " << move->PrettyStr() << std::endl;
+    } else {
+      std::cout << "bestmove 0000" << std::endl;
+    }
+    best_move = std::nullopt;
 
   });
 }
