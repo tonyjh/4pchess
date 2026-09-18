@@ -504,7 +504,7 @@ void Board::GetKingMoves2(
       const auto rook = GetPiece(rook_location);
       if (rook.Missing()
           || rook.GetPieceType() != ROOK
-          || rook.GetTeam() != piece.GetTeam()) {
+          || rook.GetColor() != piece.GetColor()) {
         continue;
       }
 
